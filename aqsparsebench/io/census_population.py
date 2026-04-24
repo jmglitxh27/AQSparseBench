@@ -4,7 +4,7 @@ This module provides a PopulationContextSource implementation that:
 
 1) Uses the Census Geocoder API to map each (lat, lon) to a tract and county GEOID.
 2) Fetches total population from the ACS 5-year API.
-3) Fetches land area (ALAND) via TIGERweb so density (people / km^2) can be computed.
+3) Fetches land area (``AREALAND``) via TIGERweb so density (people / km^2) can be computed.
 
 It is intended as a pragmatic starting point for 1 km station-centric population context.
 """
@@ -129,8 +129,8 @@ def _acs_total_population(
         return None
 
 
-def _tigerweb_aland_m2(payload: Any) -> float | None:
-    # TIGERweb responses: {"features":[{"attributes":{"ALAND":...}}]}
+def _tigerweb_arealand_m2(payload: Any) -> float | None:
+    """Return AREALAND in square meters from a TIGERweb query payload."""
     if not isinstance(payload, dict):
         return None
     feats = payload.get("features")
@@ -139,11 +139,14 @@ def _tigerweb_aland_m2(payload: Any) -> float | None:
     attrs = feats[0].get("attributes") if isinstance(feats[0], dict) else None
     if not isinstance(attrs, dict):
         return None
-    aland = attrs.get("ALAND")
-    if aland is None:
+    raw = attrs.get("AREALAND", attrs.get("ALAND"))
+    if raw is None:
         return None
     try:
-        return float(aland)
+        s = str(raw).strip()
+        if not s:
+            return None
+        return float(s)
     except Exception:
         return None
 
@@ -245,10 +248,12 @@ class CensusPopulationSource:
         return _acs_total_population(payload)
 
     def _aland_tract_m2(self, tract_geoid: str) -> float | None:
-        url = f"{self.tigerweb_url}/Tracts_Blocks/MapServer/2/query"
+        # TIGERweb/Tracts_Blocks: layer 0 is Census Tracts (see service layer directory).
+        url = f"{self.tigerweb_url}/Tracts_Blocks/MapServer/0/query"
         params = {
             "where": f"GEOID='{tract_geoid}'",
-            "outFields": "ALAND",
+            "outFields": "AREALAND,GEOID",
+            "returnGeometry": "false",
             "f": "json",
         }
         payload = _json_get(
@@ -260,13 +265,15 @@ class CensusPopulationSource:
             timeout_s=self.read_timeout_seconds,
             sleep_s=self.request_sleep_seconds,
         )
-        return _tigerweb_aland_m2(payload)
+        return _tigerweb_arealand_m2(payload)
 
     def _aland_county_m2(self, county_geoid: str) -> float | None:
-        url = f"{self.tigerweb_url}/Census2010/MapServer/1/query"
+        # TIGERweb/State_County: layer 1 is Counties (5-digit county GEOID).
+        url = f"{self.tigerweb_url}/State_County/MapServer/1/query"
         params = {
             "where": f"GEOID='{county_geoid}'",
-            "outFields": "ALAND",
+            "outFields": "AREALAND,GEOID",
+            "returnGeometry": "false",
             "f": "json",
         }
         payload = _json_get(
@@ -278,7 +285,7 @@ class CensusPopulationSource:
             timeout_s=self.read_timeout_seconds,
             sleep_s=self.request_sleep_seconds,
         )
-        return _tigerweb_aland_m2(payload)
+        return _tigerweb_arealand_m2(payload)
 
     def fetch_population_context(
         self,
