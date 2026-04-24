@@ -124,7 +124,7 @@ class AQSClient:
         last_exc: Exception | None = None
         for attempt in range(3):
             try:
-                r = self.session.get(url, params=merged, timeout=120)
+                r = self.session.get(url, params=merged, timeout=self.api.aqs_read_timeout_seconds)
                 if r.status_code in (429, 503) and attempt < 2:
                     time.sleep(2.0 ** (attempt + 1) + self.api.aqs_request_sleep_seconds)
                     continue

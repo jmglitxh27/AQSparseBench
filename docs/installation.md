@@ -1,5 +1,7 @@
 # Installation
 
+The canonical source repository is **https://github.com/jmglitxh27/AQSparseBench** (use that URL for `git clone` and `pip` VCS installs unless you are working from a fork).
+
 ## Requirements
 
 - Python 3.10 or newer
@@ -28,17 +30,17 @@ Colab is a normal Python environment: install the package, then import it like a
 **Option A — clone + editable install** (good while developing):
 
 ```text
-!git clone https://YOUR_GIT_HOST/YOUR_ORG/AQSparseBench.git
+!git clone https://github.com/jmglitxh27/AQSparseBench.git
 %cd AQSparseBench
 !pip install -e .
 ```
 
-Replace the URL with your fork or upstream repository.
+If you use a fork, substitute your fork’s clone URL.
 
 **Option B — install from a Git URL** (no clone in the notebook):
 
 ```text
-!pip install "aqsparsebench @ git+https://YOUR_GIT_HOST/YOUR_ORG/AQSparseBench.git@main"
+!pip install "aqsparsebench @ git+https://github.com/jmglitxh27/AQSparseBench.git@main"
 ```
 
 Use a branch or tag instead of `main` if you pin versions.

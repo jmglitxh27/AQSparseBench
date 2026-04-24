@@ -129,6 +129,11 @@ class ApiConfig(BaseModel):
         ge=0.0,
         description="Pause between AQS requests to stay near official courtesy limits (~10/min)",
     )
+    aqs_read_timeout_seconds: float = Field(
+        default=300.0,
+        gt=0.0,
+        description="HTTP read timeout (seconds) for each AQS GET (large byBox/byState payloads often need several minutes)",
+    )
     open_meteo_base_url: str | None = Field(
         default=None,
         description="Historical weather API base URL; None uses Open-Meteo public archive endpoint",
@@ -141,6 +146,11 @@ class ApiConfig(BaseModel):
         default=0.2,
         ge=0.0,
         description="Pause between Open-Meteo HTTP calls when batching many coordinates",
+    )
+    open_meteo_read_timeout_seconds: float = Field(
+        default=120.0,
+        gt=0.0,
+        description="HTTP read timeout (seconds) for each Open-Meteo GET",
     )
 
 

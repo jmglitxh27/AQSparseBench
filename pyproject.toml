@@ -21,6 +21,10 @@ dependencies = [
     "joblib>=1.3",
 ]
 
+[project.urls]
+Homepage = "https://github.com/jmglitxh27/AQSparseBench"
+Repository = "https://github.com/jmglitxh27/AQSparseBench"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4",
