@@ -57,6 +57,28 @@ def looks_like_aqs_daily(df: pd.DataFrame) -> bool:
     return False
 
 
+def derive_aqs_station_id_series(df: pd.DataFrame) -> pd.Series:
+    """Return ``station_id`` strings aligned with ``df`` rows (AQS-style columns)."""
+    if df.empty:
+        return pd.Series(dtype=str)
+    out = df
+    sid_c = _col(out, COL_STATION_ID, "station_id")
+    if sid_c is not None:
+        return out[sid_c].astype(str)
+    sc = _col(out, "state_code")
+    cc = _col(out, "county_code")
+    sn = _col(out, "site_number")
+    if not (sc and cc and sn):
+        raise ValueError("Cannot derive station_id: need station_id or state/county/site columns")
+    return (
+        out[sc].astype(str).str.zfill(2)
+        + "_"
+        + out[cc].astype(str).str.zfill(3)
+        + "_"
+        + out[sn].astype(str).str.zfill(4)
+    )
+
+
 def normalize_aqs_monitors_df(df: pd.DataFrame) -> pd.DataFrame:
     """Build ``station_id``, ``latitude``, ``longitude`` from typical AQS monitor columns."""
     if df.empty:
@@ -67,22 +89,7 @@ def normalize_aqs_monitors_df(df: pd.DataFrame) -> pd.DataFrame:
     if lat_c is None or lon_c is None:
         raise ValueError("AQS monitors DataFrame must include latitude/longitude columns")
 
-    sid_c = _col(out, COL_STATION_ID, "station_id")
-    if sid_c is not None:
-        station_series = out[sid_c].astype(str)
-    else:
-        sc = _col(out, "state_code")
-        cc = _col(out, "county_code")
-        sn = _col(out, "site_number")
-        if not (sc and cc and sn):
-            raise ValueError("Cannot derive station_id: need station_id or state/county/site columns")
-        station_series = (
-            out[sc].astype(str).str.zfill(2)
-            + "_"
-            + out[cc].astype(str).str.zfill(3)
-            + "_"
-            + out[sn].astype(str).str.zfill(4)
-        )
+    station_series = derive_aqs_station_id_series(out)
 
     name_c = _col(out, "site_name", "local_site_name")
     canon = pd.DataFrame(

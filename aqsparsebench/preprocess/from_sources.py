@@ -8,7 +8,17 @@ Typical US workflow::
 
     sources = DataSources.from_us_epa_defaults(api)
     monitors, daily = load_air_quality_for_preprocess(
-        sources, region, pollutant=\"pm25\", years=[2020, 2021]
+        sources, region, pollutant="pm25", years=[2020, 2021]
+    )
+
+    # Optional: one short AQS window (YYYYMMDD) instead of full calendar years
+    monitors, daily = load_air_quality_for_preprocess(
+        sources,
+        region,
+        pollutant="pm25",
+        years=[2020],
+        bdate="20200101",
+        edate="20200114",
     )
 
 Custom / non-US workflow — pass your own frames and column names::
@@ -16,13 +26,13 @@ Custom / non-US workflow — pass your own frames and column names::
     monitors, daily = load_air_quality_for_preprocess(
         sources,
         region,
-        pollutant=\"pm25\",
+        pollutant="pm25",
         years=[2020],
         monitors_df=my_mon,
         daily_df=my_day,
-        normalization=\"none\",
-        custom_monitor_columns=(\"id\", \"lat\", \"lon\"),
-        custom_daily_columns=(\"id\", \"day\", \"pm25\"),
+        normalization="none",
+        custom_monitor_columns=("id", "lat", "lon"),
+        custom_daily_columns=("id", "day", "pm25"),
     )
 """
 
@@ -50,6 +60,11 @@ from aqsparsebench.preprocess.epa_normalize import (
     looks_like_aqs_monitors,
     normalize_aqs_daily_df,
     normalize_aqs_monitors_df,
+)
+from aqsparsebench.preprocess.monitor_select import (
+    filter_monitors_operational_span,
+    restrict_daily_to_station_ids,
+    subsample_monitors_to_max_stations,
 )
 from aqsparsebench.types import RegionSpec
 
@@ -101,6 +116,14 @@ def load_air_quality_for_preprocess(
     pollutant: str,
     years: list[int],
     param: str | None = None,
+    bdate: str | None = None,
+    edate: str | None = None,
+    monitors_operational_start: str | pd.Timestamp | None = None,
+    monitors_operational_end: str | pd.Timestamp | None = None,
+    monitor_operational_mode: Literal["continuous", "overlap"] = "continuous",
+    max_monitor_stations: int | None = None,
+    monitor_subsample_random_state: int | None = None,
+    restrict_daily_to_monitors: bool | None = None,
     normalization: Literal["auto", "epa_aqs", "none"] = "auto",
     monitors_df: pd.DataFrame | None = None,
     daily_df: pd.DataFrame | None = None,
@@ -110,16 +133,62 @@ def load_air_quality_for_preprocess(
     """
     Return canonical monitor + daily long tables.
 
-    * **EPA-first** — ``normalization=\"auto\"`` applies AQS normalization when the active
-      source is :class:`~aqsparsebench.io.aqs_api.AQSClient` (or ``source_id == \"epa_aqs\"``),
+    * **EPA-first** — ``normalization="auto"`` applies AQS normalization when the active
+      source is :class:`~aqsparsebench.io.aqs_api.AQSClient` (or ``source_id == "epa_aqs"``),
       or when the fetched frames look like raw AQS (``date_local``, ``state_code``, …).
     * **Bring-your-own-data** — pass ``monitors_df`` / ``daily_df`` to skip fetches, and either
-      set ``normalization=\"none\"`` with ``custom_*_columns``, or pre-shape columns to the
+      set ``normalization="none"`` with ``custom_*_columns``, or pre-shape columns to the
       canonical names.
+    * **Short AQS windows** — when ``bdate`` and ``edate`` are ``YYYYMMDD`` strings, they are
+      forwarded to the air-quality source (EPA AQS uses a single window instead of full
+      calendar years; ``years`` is ignored for that fetch).
+    * **Monitor subset** — ``monitors_operational_start`` / ``monitors_operational_end`` filter
+      AQS rows on ``open_date`` / ``close_date`` (``continuous`` = open through the whole span,
+      ``overlap`` = any intersection). ``max_monitor_stations`` subsamples distinct sites.
+      When either applies, daily rows are restricted to the selected ``station_id`` set by
+      default (``restrict_daily_to_monitors=None``); set ``restrict_daily_to_monitors=False``
+      to keep all daily sites from the fetch.
     """
     aq = sources.air_quality
-    mon = monitors_df if monitors_df is not None else aq.fetch_monitor_catalog(region, pollutant=pollutant, years=years, param=param)
-    day = daily_df if daily_df is not None else aq.fetch_daily_air_quality(region, pollutant=pollutant, years=years, param=param)
+    mon = (
+        monitors_df
+        if monitors_df is not None
+        else aq.fetch_monitor_catalog(
+            region, pollutant=pollutant, years=years, param=param, bdate=bdate, edate=edate
+        )
+    )
+
+    applied_station_selection = False
+    if monitors_operational_start is not None and monitors_operational_end is not None:
+        mon = filter_monitors_operational_span(
+            mon,
+            monitors_operational_start,
+            monitors_operational_end,
+            mode=monitor_operational_mode,
+        )
+        applied_station_selection = True
+    elif monitors_operational_start is not None or monitors_operational_end is not None:
+        raise ValueError(
+            "Pass both monitors_operational_start and monitors_operational_end, or neither."
+        )
+
+    if max_monitor_stations is not None:
+        mon = subsample_monitors_to_max_stations(
+            mon, max_monitor_stations, random_state=monitor_subsample_random_state
+        )
+        applied_station_selection = True
+
+    restrict_daily = (
+        restrict_daily_to_monitors if restrict_daily_to_monitors is not None else applied_station_selection
+    )
+
+    day = (
+        daily_df
+        if daily_df is not None
+        else aq.fetch_daily_air_quality(
+            region, pollutant=pollutant, years=years, param=param, bdate=bdate, edate=edate
+        )
+    )
 
     if custom_daily_columns is not None:
         sc, dc, vc = custom_daily_columns
@@ -145,6 +214,13 @@ def load_air_quality_for_preprocess(
             epa_from_client = resolve_air_quality_normalization(aq, "auto") == "epa_aqs"
         if epa_from_client or (normalization == "auto" and looks_like_aqs_daily(day)):
             day = normalize_aqs_daily_df(day)
+
+    if restrict_daily:
+        if mon.empty:
+            day = day.iloc[0:0].copy()
+        else:
+            ids = frozenset(mon[COL_STATION_ID].astype(str).unique())
+            day = restrict_daily_to_station_ids(day, ids)
 
     _validate_canonical_monitors(mon)
     _validate_canonical_daily(day)

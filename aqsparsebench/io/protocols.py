@@ -31,6 +31,8 @@ class AirQualitySource(Protocol):
         pollutant: str,
         years: list[int],
         param: str | None = None,
+        bdate: str | None = None,
+        edate: str | None = None,
     ) -> pd.DataFrame:
         """Columns depend on provider; include ``latitude``, ``longitude``, ``station_id`` when possible."""
 
@@ -41,6 +43,8 @@ class AirQualitySource(Protocol):
         pollutant: str,
         years: list[int],
         param: str | None = None,
+        bdate: str | None = None,
+        edate: str | None = None,
     ) -> pd.DataFrame:
         """Daily (or finest available) measurements keyed by site + local date."""
 

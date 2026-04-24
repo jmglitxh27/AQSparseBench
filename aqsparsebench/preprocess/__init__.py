@@ -12,10 +12,16 @@ from aqsparsebench.preprocess.canonical import (
 from aqsparsebench.preprocess.epa_normalize import (
     coerce_custom_daily_to_canonical,
     coerce_custom_monitors_to_canonical,
+    derive_aqs_station_id_series,
     looks_like_aqs_daily,
     looks_like_aqs_monitors,
     normalize_aqs_daily_df,
     normalize_aqs_monitors_df,
+)
+from aqsparsebench.preprocess.monitor_select import (
+    filter_monitors_operational_span,
+    restrict_daily_to_station_ids,
+    subsample_monitors_to_max_stations,
 )
 from aqsparsebench.preprocess.from_sources import (
     build_merged_daily_panel,
@@ -43,9 +49,11 @@ __all__ = [
     "build_merged_daily_panel",
     "coerce_custom_daily_to_canonical",
     "coerce_custom_monitors_to_canonical",
+    "derive_aqs_station_id_series",
     "drop_duplicate_station_ids",
     "drop_invalid_coordinates",
     "drop_short_station_series",
+    "filter_monitors_operational_span",
     "haversine_km",
     "interpolate_time",
     "load_air_quality_for_preprocess",
@@ -58,5 +66,7 @@ __all__ = [
     "normalize_aqs_monitors_df",
     "pairwise_distance_matrix",
     "resolve_air_quality_normalization",
+    "restrict_daily_to_station_ids",
     "seasonal_mean_fill",
+    "subsample_monitors_to_max_stations",
 ]

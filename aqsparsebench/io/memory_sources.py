@@ -33,6 +33,8 @@ class DataFrameAirQualitySource:
         pollutant: str,
         years: list[int],
         param: str | None = None,
+        bdate: str | None = None,
+        edate: str | None = None,
     ) -> pd.DataFrame:
         return self.monitors_df.copy()
 
@@ -43,6 +45,8 @@ class DataFrameAirQualitySource:
         pollutant: str,
         years: list[int],
         param: str | None = None,
+        bdate: str | None = None,
+        edate: str | None = None,
     ) -> pd.DataFrame:
         return self.daily_df.copy()
 

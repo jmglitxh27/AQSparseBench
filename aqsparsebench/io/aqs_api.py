@@ -47,6 +47,11 @@ def _year_bounds(y: int) -> tuple[str, str]:
     return f"{y:04d}0101", f"{y:04d}1231"
 
 
+def _validate_aqs_ymd(token: str, *, name: str) -> None:
+    if len(token) != 8 or not token.isdigit():
+        raise ValueError(f"{name} must be an 8-digit AQS date string YYYYMMDD, got {token!r}")
+
+
 def _extract_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """AQS responses use ``Data`` or ``Body`` for row arrays depending on service/version."""
     for k in ("Data", "Body"):
@@ -251,24 +256,42 @@ class AQSClient:
         pollutant: str,
         years: list[int],
         param: str | None = None,
+        bdate: str | None = None,
+        edate: str | None = None,
     ) -> pd.DataFrame:
         """
         Monitors operating in each calendar year (one API call per year × geography chunk).
 
         ``param`` overrides the default code list for ``pollutant``.
+
+        When ``bdate`` and ``edate`` are both set (``YYYYMMDD``), only that **single** date
+        window is queried (one pass per geography chunk); ``years`` is ignored. Use this for
+        short test pulls (e.g. one week) to avoid huge byBox payloads.
         """
         codes = resolve_aqs_param_codes(pollutant, param)
         frames: list[pd.DataFrame] = []
         bbox = region.resolved_bbox()
-        for y in years:
-            bdate, edate = _year_bounds(y)
+        if (bdate is None) ^ (edate is None):
+            raise ValueError("bdate and edate must both be set or both omitted")
+        if bdate is not None and edate is not None:
+            _validate_aqs_ymd(bdate, name="bdate")
+            _validate_aqs_ymd(edate, name="edate")
+            if bdate > edate:
+                raise ValueError(f"bdate {bdate!r} must be <= edate {edate!r}")
+            windows: list[tuple[str, str]] = [(bdate, edate)]
+        else:
+            if not years:
+                raise ValueError("years must be non-empty when bdate/edate are omitted")
+            windows = [_year_bounds(y) for y in years]
+
+        for bd, ed in windows:
             if region.mode == "states" and region.state_fips:
                 for st in region.state_fips:
-                    p = self.monitors_by_state_raw(param=codes, bdate=bdate, edate=edate, state=st)
+                    p = self.monitors_by_state_raw(param=codes, bdate=bd, edate=ed, state=st)
                     self._assert_header(p)
                     frames.append(pd.DataFrame(_extract_rows(p)))
             elif bbox is not None:
-                p = self.monitors_by_box_raw(param=codes, bdate=bdate, edate=edate, bbox=bbox)
+                p = self.monitors_by_box_raw(param=codes, bdate=bd, edate=ed, bbox=bbox)
                 self._assert_header(p)
                 frames.append(pd.DataFrame(_extract_rows(p)))
             else:
@@ -300,22 +323,38 @@ class AQSClient:
         pollutant: str,
         years: list[int],
         param: str | None = None,
+        bdate: str | None = None,
+        edate: str | None = None,
     ) -> pd.DataFrame:
-        """Daily summary rows (same-year chunks; one call per year × state or box)."""
+        """Daily summary rows (one call per calendar chunk × state or box).
+
+        Pass ``bdate`` / ``edate`` (``YYYYMMDD``) together to use a **single** window instead
+        of full calendar years from ``years`` (``years`` is then ignored).
+        """
         codes = resolve_aqs_param_codes(pollutant, param)
         frames: list[pd.DataFrame] = []
         bbox = region.resolved_bbox()
-        for y in years:
-            bdate, edate = _year_bounds(y)
+        if (bdate is None) ^ (edate is None):
+            raise ValueError("bdate and edate must both be set or both omitted")
+        if bdate is not None and edate is not None:
+            _validate_aqs_ymd(bdate, name="bdate")
+            _validate_aqs_ymd(edate, name="edate")
+            if bdate > edate:
+                raise ValueError(f"bdate {bdate!r} must be <= edate {edate!r}")
+            windows = [(bdate, edate)]
+        else:
+            if not years:
+                raise ValueError("years must be non-empty when bdate/edate are omitted")
+            windows = [_year_bounds(y) for y in years]
+
+        for bd, ed in windows:
             if region.mode == "states" and region.state_fips:
                 for st in region.state_fips:
-                    p = self.daily_data_by_state_raw(
-                        param=codes, bdate=bdate, edate=edate, state=st
-                    )
+                    p = self.daily_data_by_state_raw(param=codes, bdate=bd, edate=ed, state=st)
                     self._assert_header(p)
                     frames.append(pd.DataFrame(_extract_rows(p)))
             elif bbox is not None:
-                p = self.daily_data_by_box_raw(param=codes, bdate=bdate, edate=edate, bbox=bbox)
+                p = self.daily_data_by_box_raw(param=codes, bdate=bd, edate=ed, bbox=bbox)
                 self._assert_header(p)
                 frames.append(pd.DataFrame(_extract_rows(p)))
             else:
@@ -336,9 +375,13 @@ class AQSClient:
         pollutant: str,
         years: list[int],
         param: str | None = None,
+        bdate: str | None = None,
+        edate: str | None = None,
     ) -> pd.DataFrame:
         """Protocol alias for :meth:`fetch_monitors_df` (:class:`~aqsparsebench.io.protocols.AirQualitySource`)."""
-        return self.fetch_monitors_df(region, pollutant=pollutant, years=years, param=param)
+        return self.fetch_monitors_df(
+            region, pollutant=pollutant, years=years, param=param, bdate=bdate, edate=edate
+        )
 
     def fetch_daily_air_quality(
         self,
@@ -347,9 +390,13 @@ class AQSClient:
         pollutant: str,
         years: list[int],
         param: str | None = None,
+        bdate: str | None = None,
+        edate: str | None = None,
     ) -> pd.DataFrame:
         """Protocol alias for :meth:`fetch_daily_summary_df`."""
-        return self.fetch_daily_summary_df(region, pollutant=pollutant, years=years, param=param)
+        return self.fetch_daily_summary_df(
+            region, pollutant=pollutant, years=years, param=param, bdate=bdate, edate=edate
+        )
 
     def monitors_to_station_records(
         self,

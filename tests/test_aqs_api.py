@@ -97,6 +97,38 @@ def test_assert_header_failed() -> None:
         client._assert_header(bad)
 
 
+def test_fetch_monitors_df_custom_bdate_edate_one_window(tmp_path) -> None:
+    api = ApiConfig(aqs_email="a@b.c", aqs_key="k", cache_dir=str(tmp_path), aqs_request_sleep_seconds=0.0)
+    client = AQSClient(api)
+    calls: list[tuple[str, str]] = []
+
+    def fake_get_raw(endpoint: str, params: dict, *args, **kwargs):
+        assert "monitors" in endpoint
+        calls.append((params["bdate"], params["edate"]))
+        return {"Header": [{"status": "success", "rows": 0}], "Data": []}
+
+    client.get_raw = fake_get_raw  # type: ignore[method-assign]
+
+    region = RegionSpec.from_states("ca", ("06",))
+    df = client.fetch_monitors_df(
+        region,
+        pollutant="pm25",
+        years=[],
+        bdate="20200101",
+        edate="20200107",
+    )
+    assert df.empty
+    assert calls == [("20200101", "20200107")]
+
+
+def test_fetch_monitors_df_bdate_without_edate_raises(tmp_path) -> None:
+    api = ApiConfig(aqs_email="a@b.c", aqs_key="k", cache_dir=str(tmp_path), aqs_request_sleep_seconds=0.0)
+    client = AQSClient(api)
+    region = RegionSpec.from_states("ca", ("06",))
+    with pytest.raises(ValueError, match="both"):
+        client.fetch_monitors_df(region, pollutant="pm25", years=[2020], bdate="20200101", edate=None)
+
+
 def test_fetch_monitors_df_mocked_states(tmp_path) -> None:
     api = ApiConfig(aqs_email="a@b.c", aqs_key="k", cache_dir=str(tmp_path), aqs_request_sleep_seconds=0.0)
     client = AQSClient(api)
