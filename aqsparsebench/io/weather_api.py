@@ -51,6 +51,15 @@ def _year_range_bounds(years: list[int]) -> tuple[str, str]:
     return f"{y0:04d}-01-01", f"{y1:04d}-12-31"
 
 
+def _validate_ymd_dash(token: str, *, name: str) -> None:
+    try:
+        ts = pd.to_datetime(token, format="%Y-%m-%d", errors="raise")
+    except Exception as e:  # pragma: no cover - defensive
+        raise ValueError(f"{name} must be YYYY-MM-DD, got {token!r}") from e
+    if pd.isna(ts):
+        raise ValueError(f"{name} must be YYYY-MM-DD, got {token!r}")
+
+
 class OpenMeteoClient:
     """
     Historical daily weather via `Open-Meteo archive <https://open-meteo.com/en/docs/historical-weather-api>`_.
@@ -164,6 +173,8 @@ class OpenMeteoClient:
         lon_col: str = "longitude",
         site_id_col: str | None = "station_id",
         years: list[int],
+        start_date: str | None = None,
+        end_date: str | None = None,
         variables: Sequence[str] | None = None,
     ) -> pd.DataFrame:
         """
@@ -172,7 +183,18 @@ class OpenMeteoClient:
         """
         if sites.empty:
             return pd.DataFrame()
-        start_date, end_date = _year_range_bounds(years)
+        if (start_date is None) ^ (end_date is None):
+            raise ValueError("start_date and end_date must both be set or both omitted")
+        if start_date is not None and end_date is not None:
+            _validate_ymd_dash(start_date, name="start_date")
+            _validate_ymd_dash(end_date, name="end_date")
+            if start_date > end_date:
+                raise ValueError(f"start_date {start_date!r} must be <= end_date {end_date!r}")
+            s0, s1 = start_date, end_date
+        else:
+            if not years:
+                raise ValueError("years must be non-empty when start_date/end_date are omitted")
+            s0, s1 = _year_range_bounds(years)
         df = sites.reset_index(drop=True)
         groups: dict[tuple[float, float], list[str]] = defaultdict(list)
         for i, row in df.iterrows():
@@ -190,8 +212,8 @@ class OpenMeteoClient:
             base = self.fetch_daily_meteorology(
                 latitude=lat,
                 longitude=lon,
-                start_date=start_date,
-                end_date=end_date,
+                start_date=s0,
+                end_date=s1,
                 variables=variables,
             )
             if base.empty:

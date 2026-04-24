@@ -76,6 +76,8 @@ class WeatherArchiveSource(Protocol):
         lon_col: str = "longitude",
         site_id_col: str | None = "station_id",
         years: list[int],
+        start_date: str | None = None,
+        end_date: str | None = None,
         variables: Sequence[str] | None = None,
     ) -> pd.DataFrame:
         """Long-form table: ``station_id``, ``latitude``, ``longitude``, ``date``, variables."""

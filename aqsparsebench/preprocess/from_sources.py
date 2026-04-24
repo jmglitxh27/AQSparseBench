@@ -232,20 +232,35 @@ def load_weather_for_monitors(
     monitors_df: pd.DataFrame,
     *,
     years: list[int],
+    start_date: str | None = None,
+    end_date: str | None = None,
     lat_col: str = COL_LATITUDE,
     lon_col: str = COL_LONGITUDE,
     site_id_col: str | None = COL_STATION_ID,
     variables: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Pull Open-Meteo (or any :class:`~aqsparsebench.io.protocols.WeatherArchiveSource`) for monitor coordinates."""
+    """
+    Pull Open-Meteo (or any :class:`~aqsparsebench.io.protocols.WeatherArchiveSource`) for monitor coordinates.
+
+    When ``start_date`` and ``end_date`` are both provided (``YYYY-MM-DD``), they are used as
+    an explicit window and ``years`` may be an empty list. This is useful for month-by-month
+    loops: each call fetches one month for all selected stations (one HTTP request per unique
+    coordinate pair, depending on backend deduplication).
+    """
     if monitors_df.empty:
         return pd.DataFrame()
+    if (start_date is None) ^ (end_date is None):
+        raise ValueError("start_date and end_date must both be set or both omitted")
+    if start_date is None and end_date is None and not years:
+        raise ValueError("years must be non-empty when start_date/end_date are omitted")
     return sources.weather.fetch_daily_meteorology_for_sites(
         monitors_df,
         lat_col=lat_col,
         lon_col=lon_col,
         site_id_col=site_id_col,
         years=years,
+        start_date=start_date,
+        end_date=end_date,
         variables=variables,
     )
 
