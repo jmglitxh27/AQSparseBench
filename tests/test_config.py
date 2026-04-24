@@ -24,6 +24,10 @@ def test_region_bbox_and_preset() -> None:
     assert r2.mode == "preset"
     assert r2.resolved_bbox() is not None
 
+    r3 = RegionSpec.from_preset("ny", "new_york")
+    assert r3.mode == "preset"
+    assert r3.resolved_bbox() is not None
+
 
 def test_region_states() -> None:
     r = RegionSpec.from_states("ny_ct", ("36", "09"))

@@ -48,6 +48,12 @@ REGION_PRESETS: dict[str, BoundingBox] = {
         min_lon=-124.6,
         max_lon=-114.0,
     ),
+    "new_york": BoundingBox(
+        min_lat=40.3,
+        max_lat=45.1,
+        min_lon=-79.9,
+        max_lon=-71.8,
+    ),
     "texas": BoundingBox(
         min_lat=25.5,
         max_lat=36.6,
