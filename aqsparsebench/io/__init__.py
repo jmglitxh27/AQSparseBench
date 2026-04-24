@@ -9,7 +9,12 @@ from aqsparsebench.io.aqs_api import (
     resolve_aqs_param_codes,
 )
 from aqsparsebench.io.cache import LocalCache, cache_key_from_request
-from aqsparsebench.io.memory_sources import DataFrameAirQualitySource, NullPopulationSource
+from aqsparsebench.io.census_population import CensusAPIError, CensusPopulationSource
+from aqsparsebench.io.memory_sources import (
+    DataFrameAirQualitySource,
+    DataFramePopulationSource,
+    NullPopulationSource,
+)
 from aqsparsebench.io.protocols import AirQualitySource, PopulationContextSource, WeatherArchiveSource
 from aqsparsebench.io.sources import DataSources
 from aqsparsebench.io.weather_api import (
@@ -28,7 +33,10 @@ __all__ = [
     "DEFAULT_OPEN_METEO_ARCHIVE_URL",
     "DEFAULT_POLLUTANT_PARAMS",
     "DataFrameAirQualitySource",
+    "DataFramePopulationSource",
     "DataSources",
+    "CensusAPIError",
+    "CensusPopulationSource",
     "LocalCache",
     "NullPopulationSource",
     "OpenMeteoAPIError",
